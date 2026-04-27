@@ -5,13 +5,13 @@ import {
   Hash,
   Home,
   Loader2,
-  MessageCircle,
   Plus,
   Send,
   Settings,
   Sparkles,
   Users,
 } from "lucide-react";
+import { ButtonzOutlineIcon } from "@/components/icons/buttonz-outline-icon";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -273,7 +273,7 @@ function ChatArea({
     return (
       <div className="flex-1 flex items-center justify-center bg-background">
         <div className="text-center p-8 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 max-w-md">
-          <MessageCircle className="w-10 h-10 text-primary mx-auto mb-4" />
+          <ButtonzOutlineIcon className="w-10 h-10 text-primary mx-auto mb-4" />
           <h3 className="text-xl font-bold mb-2">Start a Conversation</h3>
           <p className="text-muted-foreground">Select or create a channel to begin chatting.</p>
         </div>
