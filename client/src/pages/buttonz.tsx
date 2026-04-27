@@ -3,8 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   DoorOpen,
   Hash,
+  Home,
   Loader2,
-  LogIn,
   MessageCircle,
   Plus,
   Send,
@@ -41,16 +41,35 @@ function formatTime(date: Date | string) {
 
 function LoginScreen() {
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [matchedUser, setMatchedUser] = useState<PublicUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
+  const [isCheckingGameForgeSession, setIsCheckingGameForgeSession] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("from") === "gfs" || document.referrer.startsWith(gfsUrl);
+  });
+
+  const lookupMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/auth/lookup", { username });
+      return response.json();
+    },
+    onSuccess: (data: { user: PublicUser }) => {
+      setError(null);
+      setMatchedUser(data.user);
+    },
+    onError: (mutationError) => {
+      setMatchedUser(null);
+      setError(mutationError instanceof Error ? mutationError.message : "Login failed");
+    },
+  });
 
   const loginMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/auth/login", { username, password });
+      const response = await apiRequest("POST", "/api/auth/login", { username: matchedUser?.username || username });
       return response.json();
     },
     onSuccess: () => {
-      setError(null);
       queryClient.invalidateQueries({ queryKey: ["/api/user/current"] });
     },
     onError: (mutationError) => {
@@ -58,8 +77,31 @@ function LoginScreen() {
     },
   });
 
+  const gfsSessionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/auth/gfs-session");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/current"] });
+    },
+    onSettled: () => {
+      setIsCheckingGameForgeSession(false);
+    },
+  });
+
+  useEffect(() => {
+    if (isCheckingGameForgeSession) {
+      gfsSessionMutation.mutate();
+    }
+  }, [isCheckingGameForgeSession]);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    lookupMutation.mutate();
+  };
+
+  const handleProceed = () => {
     loginMutation.mutate();
   };
 
@@ -72,44 +114,61 @@ function LoginScreen() {
           </div>
           <h1 className="text-4xl font-bold">Buttonz</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Log in with your existing GameForgeStudio account.
+            Enter your GameForgeStudio username or email to continue.
           </p>
         </div>
 
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="username">Username or email</Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoComplete="username"
-              className="mt-2 rounded-xl"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              autoComplete="current-password"
-              className="mt-2 rounded-xl"
-              required
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-foreground">
-              {error}
+          {isCheckingGameForgeSession ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+              Checking your GameForgeStudio session...
             </div>
+          ) : matchedUser ? (
+            <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-center">
+              <p className="font-semibold text-foreground">Welcome, {matchedUser.displayName}!</p>
+              <p className="text-sm text-muted-foreground">Your GameForgeStudio account was found.</p>
+              <Button type="button" className="w-full rounded-xl" onClick={handleProceed}>
+                {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                Proceed to Buttonz
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <Label htmlFor="username">Username or email</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  autoComplete="username"
+                  className="mt-2 rounded-xl"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-foreground">
+                  {error}
+                </div>
+              )}
+
+              <Button className="w-full rounded-xl" disabled={lookupMutation.isPending}>
+                {lookupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                Find Account
+              </Button>
+            </>
           )}
 
-          <Button className="w-full rounded-xl" disabled={loginMutation.isPending}>
-            {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Log In
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-xl"
+            onClick={() => {
+              window.location.href = gfsUrl;
+            }}
+          >
+            <Home className="h-4 w-4" />
+            Return to GameForgeStudio
           </Button>
         </div>
       </form>
@@ -123,6 +182,7 @@ function ChatSidebar({
   currentUser,
   onChatSelect,
   onCreateChat,
+  onReturnToGameForge,
   onSettings,
   onLogout,
 }: {
@@ -131,6 +191,7 @@ function ChatSidebar({
   currentUser: PublicUser;
   onChatSelect: (chatId: string) => void;
   onCreateChat: () => void;
+  onReturnToGameForge: () => void;
   onSettings: () => void;
   onLogout: () => void;
 }) {
@@ -156,6 +217,15 @@ function ChatSidebar({
             <p className="text-xs text-muted-foreground">Using your GameForgeStudio identity</p>
           </div>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-4 w-full rounded-xl border-primary/30"
+          onClick={onReturnToGameForge}
+        >
+          <Home className="w-4 h-4" />
+          Return to GameForgeStudio
+        </Button>
       </div>
 
       <ScrollArea className="flex-1 px-3 mt-4">
@@ -459,6 +529,7 @@ export default function ButtonzPage() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
   const userQuery = useCurrentUser();
 
   const chatsQuery = useQuery<Chat[]>({
@@ -525,6 +596,9 @@ export default function ButtonzPage() {
           currentUser={userQuery.data}
           onChatSelect={setActiveChatId}
           onCreateChat={() => setCreateOpen(true)}
+          onReturnToGameForge={() => {
+            window.location.href = gfsUrl;
+          }}
           onSettings={() => setSettingsOpen(true)}
           onLogout={() => logoutMutation.mutate()}
         />

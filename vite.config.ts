@@ -18,10 +18,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5174,
+    port: 5175,
+    strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:5001",
+        target: "http://127.0.0.1:5001",
         changeOrigin: true,
       },
     },

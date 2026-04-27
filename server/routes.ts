@@ -1,6 +1,5 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import {
   insertChatSchema,
@@ -52,9 +51,36 @@ function parseLimitOffset(query: Request["query"]) {
   };
 }
 
+async function createButtonzSession(req: Request, userId: string) {
+  req.session.userId = userId;
+  await storage.ensureMainChat(userId);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/auth/lookup", async (req, res) => {
+    const credentials = loginSchema.parse(req.body);
+    // #region agent log
+    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'B,C',location:'buttonz/server/routes.ts:63',message:'Buttonz lookup route reached',data:{identifierLength:credentials.username.length,identifierHasAt:credentials.username.includes("@")},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const user = await storage.getUserByUsernameOrEmail(credentials.username);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Use your existing GameForgeStudio account to access Buttonz.",
+      });
+    }
+
+    return res.json({
+      message: `Welcome, ${user.displayName}!`,
+      user: toPublicUser(user),
+    });
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     const credentials = loginSchema.parse(req.body);
+    // #region agent log
+    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'B,C',location:'buttonz/server/routes.ts:83',message:'Buttonz login route reached',data:{identifierLength:credentials.username.length,identifierHasAt:credentials.username.includes("@")},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const user = await storage.getUserByUsernameOrEmail(credentials.username);
 
     if (!user) {
@@ -63,16 +89,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    const isValidPassword = await bcrypt.compare(credentials.password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ message: "Invalid username or password" });
-    }
-
-    req.session.userId = user.id;
-    await storage.ensureMainChat(user.id);
+    await createButtonzSession(req, user.id);
 
     return res.json({
-      message: "Login successful",
+      message: `Welcome, ${user.displayName}!`,
+      user: toPublicUser(user),
+    });
+  });
+
+  app.post("/api/auth/gfs-session", async (req, res) => {
+    const gameforgeUrl = process.env.GAMEFORGE_URL;
+    const cookie = req.headers.cookie;
+    // #region agent log
+    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'A,D,E',location:'buttonz/server/routes.ts:105',message:'Buttonz GFS session route reached',data:{hasGameforgeUrl:Boolean(gameforgeUrl),gameforgeUrl,hasCookie:Boolean(cookie),cookieNameCount:cookie ? cookie.split(";").length : 0},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    if (!gameforgeUrl || !cookie) {
+      return res.status(401).json({ message: "No GameForgeStudio session available" });
+    }
+
+    const response = await fetch(new URL("/api/user/current", gameforgeUrl), {
+      headers: { cookie },
+    });
+    // #region agent log
+    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'D,E',location:'buttonz/server/routes.ts:119',message:'Buttonz GFS current-user response',data:{status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    if (!response.ok) {
+      return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
+    }
+
+    const gameforgeUser = await response.json() as { id?: string };
+    if (!gameforgeUser.id) {
+      return res.status(401).json({ message: "GameForgeStudio session did not include a user" });
+    }
+
+    const user = await storage.getUser(gameforgeUser.id);
+    if (!user) {
+      return res.status(401).json({ message: "GameForgeStudio account was not found" });
+    }
+
+    await createButtonzSession(req, user.id);
+
+    return res.json({
+      message: `Welcome, ${user.displayName}!`,
       user: toPublicUser(user),
     });
   });

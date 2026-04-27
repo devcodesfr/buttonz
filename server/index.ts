@@ -53,14 +53,17 @@ app.use((req, res, next) => {
     res.status(500).json({ message });
   });
 
-  if (app.get("env") === "development") {
+  if (process.env.USE_VITE_MIDDLEWARE === "true") {
     await setupVite(app, server);
-  } else {
+  } else if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   }
 
   const port = parseInt(process.env.PORT || "5001", 10);
   server.listen(port, "0.0.0.0", () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'A',location:'buttonz/server/index.ts:66',message:'Buttonz backend listening',data:{port,nodeEnv:process.env.NODE_ENV || null,hasDatabaseUrl:Boolean(process.env.DATABASE_URL),hasGameforgeUrl:Boolean(process.env.GAMEFORGE_URL)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     log(`Buttonz serving on port ${port}`);
   });
 })();
