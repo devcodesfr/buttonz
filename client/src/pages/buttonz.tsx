@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   DoorOpen,
@@ -40,41 +40,14 @@ function formatTime(date: Date | string) {
 }
 
 function LoginScreen() {
-  const [username, setUsername] = useState("");
-  const [matchedUser, setMatchedUser] = useState<PublicUser | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
-  const [isCheckingGameForgeSession, setIsCheckingGameForgeSession] = useState(() => {
+  const gfsLoginUrl = new URL("/login", gfsUrl).toString();
+  const launchedFromGameForge = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("from") === "gfs" || document.referrer.startsWith(gfsUrl);
-  });
-
-  const lookupMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/auth/lookup", { username });
-      return response.json();
-    },
-    onSuccess: (data: { user: PublicUser }) => {
-      setError(null);
-      setMatchedUser(data.user);
-    },
-    onError: (mutationError) => {
-      setMatchedUser(null);
-      setError(mutationError instanceof Error ? mutationError.message : "Login failed");
-    },
-  });
-
-  const loginMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/auth/login", { username: matchedUser?.username || username });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user/current"] });
-    },
-    onError: (mutationError) => {
-      setError(mutationError instanceof Error ? mutationError.message : "Login failed");
-    },
+  }, [gfsUrl]);
+  const [isCheckingGameForgeSession, setIsCheckingGameForgeSession] = useState(() => {
+    return launchedFromGameForge;
   });
 
   const gfsSessionMutation = useMutation({
@@ -96,82 +69,59 @@ function LoginScreen() {
     }
   }, [isCheckingGameForgeSession]);
 
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    lookupMutation.mutate();
-  };
-
-  const handleProceed = () => {
-    loginMutation.mutate();
-  };
-
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.25),transparent_35%),linear-gradient(135deg,#070b18,#111827)] flex items-center justify-center p-6">
-      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-3xl border border-primary/20 bg-card/90 p-8 shadow-2xl shadow-primary/20">
+      <div className="w-full max-w-md rounded-3xl border border-primary/20 bg-card/90 p-8 shadow-2xl shadow-primary/20">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-cyan-400 shadow-lg shadow-primary/30">
-            <MessageCircle className="h-10 w-10 text-white" />
-          </div>
+          <img
+            src="/buttonz-icon.png"
+            alt="Buttonz"
+            className="mx-auto mb-4 h-28 w-28 object-contain drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
+          />
           <h1 className="text-4xl font-bold">Buttonz</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Enter your GameForgeStudio username or email to continue.
+            Buttonz requires a verified GameForgeStudio session.
           </p>
         </div>
 
         <div className="space-y-4">
           {isCheckingGameForgeSession ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-              Checking your GameForgeStudio session...
+            <div className="rounded-2xl border border-primary/30 bg-primary/10 p-4 text-sm text-primary">
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Checking your GameForgeStudio session...
+              </div>
             </div>
-          ) : matchedUser ? (
+          ) : launchedFromGameForge && gfsSessionMutation.isError ? (
             <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-center">
-              <p className="font-semibold text-foreground">Welcome, {matchedUser.displayName}!</p>
-              <p className="text-sm text-muted-foreground">Your GameForgeStudio account was found.</p>
-              <Button type="button" className="w-full rounded-xl" onClick={handleProceed}>
-                {loginMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                Proceed to Buttonz
+              <p className="font-semibold text-foreground">Session Verification Failed</p>
+              <p className="text-sm text-muted-foreground">
+                GameForgeStudio could not verify your session, so Buttonz did not create a session.
+              </p>
+              <Button type="button" className="w-full rounded-xl" onClick={() => {
+                window.location.href = gfsLoginUrl;
+              }}>
+                <Home className="h-4 w-4" />
+                Sign in again through GameForgeStudio
               </Button>
             </div>
           ) : (
-            <>
-              <div>
-                <Label htmlFor="username">Username or email</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  autoComplete="username"
-                  className="mt-2 rounded-xl"
-                  required
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-foreground">
-                  {error}
-                </div>
-              )}
-
-              <Button className="w-full rounded-xl" disabled={lookupMutation.isPending}>
-                {lookupMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                Find Account
+            <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-center">
+              <p className="font-semibold text-foreground">Access Required</p>
+              <p className="text-sm text-muted-foreground">
+                Please sign in to GameForgeStudio first, then open Buttonz from the GameForgeStudio sidebar.
+              </p>
+              <Button type="button" className="w-full rounded-xl" onClick={() => {
+                window.location.href = gfsLoginUrl;
+              }}>
+                <Home className="h-4 w-4" />
+                Sign in through GameForgeStudio
               </Button>
-            </>
+            </div>
           )}
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-xl"
-            onClick={() => {
-              window.location.href = gfsUrl;
-            }}
-          >
-            <Home className="h-4 w-4" />
-            Return to GameForgeStudio
-          </Button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -199,9 +149,11 @@ function ChatSidebar({
     <div className="w-72 bg-gradient-to-b from-card to-background border-r border-border/50 flex flex-col rounded-r-3xl overflow-hidden animate-slide-in-left">
       <div className="p-6 bg-gradient-to-br from-primary/20 to-primary/5 border-b border-primary/20">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30">
-            <MessageCircle className="w-5 h-5 text-white" />
-          </div>
+          <img
+            src="/buttonz-icon.png"
+            alt="Buttonz"
+            className="h-10 w-10 object-contain drop-shadow-[0_0_12px_hsl(var(--primary)/0.45)]"
+          />
           <div>
             <h2 className="text-xl font-bold">Buttonz</h2>
             <p className="text-xs text-muted-foreground">Connect & Collaborate</p>
@@ -449,12 +401,12 @@ function SettingsDialog({ open, onClose, currentUser }: { open: boolean; onClose
               <p className="text-xs text-muted-foreground mt-1">Managed by GameForgeStudio</p>
             </div>
             <div>
-              <Label>Email</Label>
-              <Input value={currentUser.email} disabled className="mt-2 bg-muted/50" />
+              <Label>Display name</Label>
+              <Input value={currentUser.displayName} disabled className="mt-2 bg-muted/50" />
             </div>
             <div>
-              <Label>About</Label>
-              <Textarea value={currentUser.bio || ""} readOnly className="mt-2 bg-muted/50" />
+              <Label>Role</Label>
+              <Input value={currentUser.jobTitle || currentUser.role} disabled className="mt-2 bg-muted/50" />
             </div>
           </div>
           <div className="space-y-4">

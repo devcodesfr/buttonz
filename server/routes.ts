@@ -5,7 +5,7 @@ import {
   insertChatSchema,
   insertMessageSchema,
   loginSchema,
-  toPublicUser,
+  safePublicUser,
 } from "@shared/schema";
 import { storage } from "./storage";
 
@@ -59,9 +59,6 @@ async function createButtonzSession(req: Request, userId: string) {
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/lookup", async (req, res) => {
     const credentials = loginSchema.parse(req.body);
-    // #region agent log
-    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'B,C',location:'buttonz/server/routes.ts:63',message:'Buttonz lookup route reached',data:{identifierLength:credentials.username.length,identifierHasAt:credentials.username.includes("@")},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const user = await storage.getUserByUsernameOrEmail(credentials.username);
 
     if (!user) {
@@ -72,48 +69,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     return res.json({
       message: `Welcome, ${user.displayName}!`,
-      user: toPublicUser(user),
+      user: safePublicUser(user),
     });
   });
 
-  app.post("/api/auth/login", async (req, res) => {
-    const credentials = loginSchema.parse(req.body);
-    // #region agent log
-    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'B,C',location:'buttonz/server/routes.ts:83',message:'Buttonz login route reached',data:{identifierLength:credentials.username.length,identifierHasAt:credentials.username.includes("@")},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    const user = await storage.getUserByUsernameOrEmail(credentials.username);
-
-    if (!user) {
-      return res.status(401).json({
-        message: "Use your existing GameForgeStudio account to log in.",
-      });
-    }
-
-    await createButtonzSession(req, user.id);
-
-    return res.json({
-      message: `Welcome, ${user.displayName}!`,
-      user: toPublicUser(user),
+  app.post("/api/auth/login", (_req, res) => {
+    return res.status(403).json({
+      message: "Direct Buttonz login is disabled. Sign in through GameForgeStudio to continue.",
     });
   });
 
   app.post("/api/auth/gfs-session", async (req, res) => {
     const gameforgeUrl = process.env.GAMEFORGE_URL;
     const cookie = req.headers.cookie;
-    // #region agent log
-    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'A,D,E',location:'buttonz/server/routes.ts:105',message:'Buttonz GFS session route reached',data:{hasGameforgeUrl:Boolean(gameforgeUrl),gameforgeUrl,hasCookie:Boolean(cookie),cookieNameCount:cookie ? cookie.split(";").length : 0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     if (!gameforgeUrl || !cookie) {
       return res.status(401).json({ message: "No GameForgeStudio session available" });
     }
 
-    const response = await fetch(new URL("/api/user/current", gameforgeUrl), {
-      headers: { cookie },
-    });
-    // #region agent log
-    fetch('http://127.0.0.1:7855/ingest/e6e06c55-184c-447a-b3f0-43f18b3c62bc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59f846'},body:JSON.stringify({sessionId:'59f846',runId:'pre-fix-buttonz-auth',hypothesisId:'D,E',location:'buttonz/server/routes.ts:119',message:'Buttonz GFS current-user response',data:{status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    let response: globalThis.Response;
+    try {
+      response = await fetch(new URL("/api/user/current", gameforgeUrl), {
+        headers: { cookie },
+      });
+    } catch {
+      return res.status(401).json({ message: "GameForgeStudio session could not be verified" });
+    }
 
     if (!response.ok) {
       return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
@@ -133,7 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     return res.json({
       message: `Welcome, ${user.displayName}!`,
-      user: toPublicUser(user),
+      user: safePublicUser(user),
     });
   });
 
@@ -156,12 +137,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     await storage.ensureMainChat(user.id);
-    return res.json(toPublicUser(user));
+    return res.json(safePublicUser(user));
   });
 
   app.get("/api/users", requireAuth, async (_req, res) => {
     const users = await storage.getAllUsers();
-    return res.json(users.map(toPublicUser));
+    return res.json(users.map(safePublicUser));
   });
 
   app.get("/api/chats", requireAuth, async (req, res) => {

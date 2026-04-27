@@ -75,7 +75,7 @@ export const loginSchema = z.object({
 });
 
 export type User = typeof users.$inferSelect;
-export type PublicUser = Omit<User, "password">;
+export type PublicUser = Pick<User, "id" | "username" | "displayName" | "role" | "avatar" | "jobTitle" | "status">;
 export type Chat = typeof chats.$inferSelect;
 export type InsertChat = z.infer<typeof insertChatSchema>;
 export type ChatMember = typeof chatMembers.$inferSelect;
@@ -83,7 +83,14 @@ export type InsertChatMember = z.infer<typeof insertChatMemberSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
-export function toPublicUser(user: User): PublicUser {
-  const { password, ...publicUser } = user;
-  return publicUser;
+export function safePublicUser(user: User): PublicUser {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    avatar: user.avatar,
+    jobTitle: user.jobTitle,
+    status: user.status,
+  };
 }
