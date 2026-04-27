@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Buttonz">
+  <defs>
+    <linearGradient id="buttonz-gradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#070b18"/>
+  <circle cx="28" cy="28" r="18" fill="url(#buttonz-gradient)"/>
+  <circle cx="41" cy="39" r="13" fill="#0f172a"/>
+  <path d="M23 26h16M23 34h9" stroke="#f8fafc" stroke-width="5" stroke-linecap="round"/>
+</svg>
