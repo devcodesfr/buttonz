@@ -39,8 +39,26 @@ function formatTime(date: Date | string) {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function getGfsOriginFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const gfsOrigin = params.get("gfsOrigin");
+
+  if (!gfsOrigin) return null;
+
+  try {
+    return new URL(gfsOrigin).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getConfiguredGfsUrl() {
+  return import.meta.env.VITE_GFS_URL || "http://localhost:5173";
+}
+
 function LoginScreen() {
-  const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
+  const launchedGfsOrigin = useMemo(getGfsOriginFromUrl, []);
+  const gfsUrl = launchedGfsOrigin || getConfiguredGfsUrl();
   const gfsLoginUrl = new URL("/login", gfsUrl).toString();
   const handoffToken = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -59,7 +77,7 @@ function LoginScreen() {
       const response = await apiRequest(
         "POST",
         "/api/auth/gfs-session",
-        handoffToken ? { handoff: handoffToken } : undefined,
+        handoffToken ? { handoff: handoffToken, gfsOrigin: launchedGfsOrigin } : undefined,
       );
       return response.json();
     },
@@ -494,7 +512,8 @@ export default function ButtonzPage() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
+  const launchedGfsOrigin = useMemo(getGfsOriginFromUrl, []);
+  const gfsUrl = launchedGfsOrigin || getConfiguredGfsUrl();
   const userQuery = useCurrentUser();
 
   const chatsQuery = useQuery<Chat[]>({

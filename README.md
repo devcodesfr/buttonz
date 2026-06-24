@@ -89,7 +89,8 @@ DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 SESSION_SECRET=replace-with-a-long-random-secret
 PORT=5001
 GAMEFORGE_URL=http://localhost:5000
-VITE_GFS_URL=http://localhost:5174
+GAMEFORGE_ALLOWED_ORIGINS=http://localhost:5000,http://localhost:5173
+VITE_GFS_URL=http://localhost:5173
 USE_VITE_MIDDLEWARE=false
 ```
 

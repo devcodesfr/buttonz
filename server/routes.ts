@@ -56,6 +56,53 @@ async function createButtonzSession(req: Request, userId: string) {
   await storage.ensureMainChat(userId);
 }
 
+function toOrigin(url: string | undefined) {
+  if (!url) return undefined;
+
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function getAllowedGameForgeOrigins() {
+  const configuredOrigins = (process.env.GAMEFORGE_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => toOrigin(origin.trim()))
+    .filter((origin): origin is string => Boolean(origin));
+  const fallbackOrigin = toOrigin(process.env.GAMEFORGE_URL);
+
+  return new Set([
+    ...configuredOrigins,
+    ...(fallbackOrigin ? [fallbackOrigin] : []),
+    "http://localhost:5000",
+    "http://localhost:5173",
+  ]);
+}
+
+function getVerifiedGameForgeOrigin(candidateOrigin: unknown) {
+  if (typeof candidateOrigin !== "string") {
+    return undefined;
+  }
+
+  const origin = toOrigin(candidateOrigin);
+  if (!origin) {
+    return undefined;
+  }
+
+  return getAllowedGameForgeOrigins().has(origin) ? origin : undefined;
+}
+
+function getGameForgeVerificationUrl(candidateOrigin: unknown) {
+  const verifiedOrigin = getVerifiedGameForgeOrigin(candidateOrigin);
+  if (verifiedOrigin) {
+    return verifiedOrigin;
+  }
+
+  return toOrigin(process.env.GAMEFORGE_URL);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/lookup", async (req, res) => {
     const credentials = loginSchema.parse(req.body);
@@ -80,8 +127,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/gfs-session", async (req, res) => {
-    const gameforgeUrl = process.env.GAMEFORGE_URL;
     const handoff = typeof req.body?.handoff === "string" ? req.body.handoff : undefined;
+    const gfsOrigin = req.body?.gfsOrigin;
+    const gameforgeUrl = getGameForgeVerificationUrl(gfsOrigin);
     const cookie = req.headers.cookie;
 
     if (!gameforgeUrl) {
@@ -91,6 +139,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let gameforgeUser: GameForgeUserPayload;
 
     if (handoff) {
+      if (typeof gfsOrigin === "string" && !getVerifiedGameForgeOrigin(gfsOrigin)) {
+        return res.status(401).json({ message: "GameForgeStudio origin is not allowed" });
+      }
+
       let handoffResponse: globalThis.Response;
       try {
         handoffResponse = await fetch(new URL("/api/auth/buttonz-handoff/verify", gameforgeUrl), {
@@ -99,7 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           body: JSON.stringify({ token: handoff }),
         });
       } catch {
-        return res.status(401).json({ message: "GameForgeStudio handoff could not be verified" });
+        return res.status(401).json({ message: "GameForgeStudio handoff verify endpoint could not be reached" });
       }
 
       if (!handoffResponse.ok) {
