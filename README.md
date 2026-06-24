@@ -134,7 +134,7 @@ The next phase is focused on making the app more production-shaped: clearer depl
 
 ## Related Project
 
-- [devcodesfr/gameforgestudio-platform](https://github.com/devcodesfr/gameforgestudio-platform) - central GameForgeStudio platform hub.
+- [GameForgeStudio](https://github.com/devcodesfr/gameforgestudio-platform) - central GameForgeStudio platform hub.
 
 ## Resume Notes
 
