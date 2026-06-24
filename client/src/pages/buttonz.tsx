@@ -42,20 +42,33 @@ function formatTime(date: Date | string) {
 function LoginScreen() {
   const gfsUrl = import.meta.env.VITE_GFS_URL || "http://localhost:5174";
   const gfsLoginUrl = new URL("/login", gfsUrl).toString();
+  const handoffToken = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("handoff");
+  }, []);
   const launchedFromGameForge = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("from") === "gfs" || document.referrer.startsWith(gfsUrl);
-  }, [gfsUrl]);
+    return Boolean(handoffToken) || params.get("from") === "gfs" || document.referrer.startsWith(gfsUrl);
+  }, [gfsUrl, handoffToken]);
   const [isCheckingGameForgeSession, setIsCheckingGameForgeSession] = useState(() => {
     return launchedFromGameForge;
   });
 
   const gfsSessionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/auth/gfs-session");
+      const response = await apiRequest(
+        "POST",
+        "/api/auth/gfs-session",
+        handoffToken ? { handoff: handoffToken } : undefined,
+      );
       return response.json();
     },
     onSuccess: () => {
+      if (handoffToken) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("handoff");
+        window.history.replaceState({}, "", url.toString());
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/user/current"] });
     },
     onSettled: () => {

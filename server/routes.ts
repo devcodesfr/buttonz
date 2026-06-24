@@ -81,26 +81,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/gfs-session", async (req, res) => {
     const gameforgeUrl = process.env.GAMEFORGE_URL;
+    const handoff = typeof req.body?.handoff === "string" ? req.body.handoff : undefined;
     const cookie = req.headers.cookie;
 
-    if (!gameforgeUrl || !cookie) {
+    if (!gameforgeUrl) {
+      return res.status(401).json({ message: "GameForgeStudio verification URL is not configured" });
+    }
+
+    let gameforgeUser: GameForgeUserPayload;
+
+    if (handoff) {
+      let handoffResponse: globalThis.Response;
+      try {
+        handoffResponse = await fetch(new URL("/api/auth/buttonz-handoff/verify", gameforgeUrl), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: handoff }),
+        });
+      } catch {
+        return res.status(401).json({ message: "GameForgeStudio handoff could not be verified" });
+      }
+
+      if (!handoffResponse.ok) {
+        return res.status(401).json({ message: "GameForgeStudio handoff was invalid or expired" });
+      }
+
+      gameforgeUser = await handoffResponse.json() as GameForgeUserPayload;
+    } else if (!cookie) {
       return res.status(401).json({ message: "No GameForgeStudio session available" });
+    } else {
+      let response: globalThis.Response;
+      try {
+        response = await fetch(new URL("/api/user/current", gameforgeUrl), {
+          headers: { cookie },
+        });
+      } catch {
+        return res.status(401).json({ message: "GameForgeStudio session could not be verified" });
+      }
+
+      if (!response.ok) {
+        return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
+      }
+
+      gameforgeUser = await response.json() as GameForgeUserPayload;
     }
 
-    let response: globalThis.Response;
-    try {
-      response = await fetch(new URL("/api/user/current", gameforgeUrl), {
-        headers: { cookie },
-      });
-    } catch {
-      return res.status(401).json({ message: "GameForgeStudio session could not be verified" });
-    }
-
-    if (!response.ok) {
-      return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
-    }
-
-    const gameforgeUser = await response.json() as GameForgeUserPayload;
     if (!gameforgeUser.id) {
       return res.status(401).json({ message: "GameForgeStudio session did not include a user" });
     }
