@@ -39,35 +39,26 @@ function formatTime(date: Date | string) {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function getGfsOriginFromUrl() {
+function getCodeFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const gfsOrigin = params.get("gfsOrigin");
-
-  if (!gfsOrigin) return null;
-
-  try {
-    return new URL(gfsOrigin).origin;
-  } catch {
-    return null;
-  }
+  return params.get("code");
 }
 
-function getConfiguredGfsUrl() {
-  return import.meta.env.VITE_GFS_URL || "http://localhost:5173";
-}
+type AppConfig = {
+  gameforgePublicUrl: string;
+};
 
 function LoginScreen() {
-  const launchedGfsOrigin = useMemo(getGfsOriginFromUrl, []);
-  const gfsUrl = launchedGfsOrigin || getConfiguredGfsUrl();
-  const gfsLoginUrl = new URL("/login", gfsUrl).toString();
-  const handoffToken = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("handoff");
-  }, []);
+  const appConfigQuery = useQuery<AppConfig>({
+    queryKey: ["/api/config"],
+  });
+  const gfsUrl = appConfigQuery.data?.gameforgePublicUrl;
+  const gfsLoginUrl = gfsUrl ? new URL("/login", gfsUrl).toString() : undefined;
+  const authCode = useMemo(getCodeFromUrl, []);
   const launchedFromGameForge = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return Boolean(handoffToken) || params.get("from") === "gfs" || document.referrer.startsWith(gfsUrl);
-  }, [gfsUrl, handoffToken]);
+    return Boolean(authCode) || params.get("from") === "gfs" || (gfsUrl ? document.referrer.startsWith(gfsUrl) : false);
+  }, [authCode, gfsUrl]);
   const [isCheckingGameForgeSession, setIsCheckingGameForgeSession] = useState(() => {
     return launchedFromGameForge;
   });
@@ -77,14 +68,14 @@ function LoginScreen() {
       const response = await apiRequest(
         "POST",
         "/api/auth/gfs-session",
-        handoffToken ? { handoff: handoffToken, gfsOrigin: launchedGfsOrigin } : undefined,
+        authCode ? { code: authCode } : {},
       );
       return response.json();
     },
     onSuccess: () => {
-      if (handoffToken) {
+      if (authCode) {
         const url = new URL(window.location.href);
-        url.searchParams.delete("handoff");
+        url.searchParams.delete("code");
         window.history.replaceState({}, "", url.toString());
       }
       queryClient.invalidateQueries({ queryKey: ["/api/user/current"] });
@@ -129,8 +120,10 @@ function LoginScreen() {
               <p className="text-sm text-muted-foreground">
                 GameForgeStudio could not verify your session, so Buttonz did not create a session.
               </p>
-              <Button type="button" className="w-full rounded-xl" onClick={() => {
-                window.location.href = gfsLoginUrl;
+              <Button type="button" className="w-full rounded-xl" disabled={!gfsLoginUrl} onClick={() => {
+                if (gfsLoginUrl) {
+                  window.location.href = gfsLoginUrl;
+                }
               }}>
                 <Home className="h-4 w-4" />
                 Sign in again through GameForgeStudio
@@ -142,8 +135,10 @@ function LoginScreen() {
               <p className="text-sm text-muted-foreground">
                 Please sign in to GameForgeStudio first, then open Buttonz from the GameForgeStudio sidebar.
               </p>
-              <Button type="button" className="w-full rounded-xl" onClick={() => {
-                window.location.href = gfsLoginUrl;
+              <Button type="button" className="w-full rounded-xl" disabled={!gfsLoginUrl} onClick={() => {
+                if (gfsLoginUrl) {
+                  window.location.href = gfsLoginUrl;
+                }
               }}>
                 <Home className="h-4 w-4" />
                 Sign in through GameForgeStudio
@@ -512,8 +507,10 @@ export default function ButtonzPage() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const launchedGfsOrigin = useMemo(getGfsOriginFromUrl, []);
-  const gfsUrl = launchedGfsOrigin || getConfiguredGfsUrl();
+  const appConfigQuery = useQuery<AppConfig>({
+    queryKey: ["/api/config"],
+  });
+  const gfsUrl = appConfigQuery.data?.gameforgePublicUrl;
   const userQuery = useCurrentUser();
 
   const chatsQuery = useQuery<Chat[]>({
@@ -581,7 +578,9 @@ export default function ButtonzPage() {
           onChatSelect={setActiveChatId}
           onCreateChat={() => setCreateOpen(true)}
           onReturnToGameForge={() => {
-            window.location.href = gfsUrl;
+            if (gfsUrl) {
+              window.location.href = gfsUrl;
+            }
           }}
           onSettings={() => setSettingsOpen(true)}
           onLogout={() => logoutMutation.mutate()}

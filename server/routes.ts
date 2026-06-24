@@ -56,54 +56,28 @@ async function createButtonzSession(req: Request, userId: string) {
   await storage.ensureMainChat(userId);
 }
 
-function toOrigin(url: string | undefined) {
-  if (!url) return undefined;
+function getGameForgeConfig() {
+  const appId = process.env.GAMEFORGE_APP_ID;
+  const apiUrl = process.env.GAMEFORGE_API_URL;
+  const publicUrl = process.env.GAMEFORGE_PUBLIC_URL;
 
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
-}
-
-function getAllowedGameForgeOrigins() {
-  const configuredOrigins = (process.env.GAMEFORGE_ALLOWED_ORIGINS || "")
-    .split(",")
-    .map((origin) => toOrigin(origin.trim()))
-    .filter((origin): origin is string => Boolean(origin));
-  const fallbackOrigin = toOrigin(process.env.GAMEFORGE_URL);
-
-  return new Set([
-    ...configuredOrigins,
-    ...(fallbackOrigin ? [fallbackOrigin] : []),
-    "http://localhost:5000",
-    "http://localhost:5173",
-  ]);
-}
-
-function getVerifiedGameForgeOrigin(candidateOrigin: unknown) {
-  if (typeof candidateOrigin !== "string") {
+  if (!appId || !apiUrl || !publicUrl) {
     return undefined;
   }
 
-  const origin = toOrigin(candidateOrigin);
-  if (!origin) {
-    return undefined;
-  }
-
-  return getAllowedGameForgeOrigins().has(origin) ? origin : undefined;
-}
-
-function getGameForgeVerificationUrl(candidateOrigin: unknown) {
-  const verifiedOrigin = getVerifiedGameForgeOrigin(candidateOrigin);
-  if (verifiedOrigin) {
-    return verifiedOrigin;
-  }
-
-  return toOrigin(process.env.GAMEFORGE_URL);
+  return { appId, apiUrl, publicUrl };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.get("/api/config", (_req, res) => {
+    const config = getGameForgeConfig();
+    if (!config) {
+      return res.status(500).json({ message: "GameForgeStudio configuration is incomplete" });
+    }
+
+    return res.json({ gameforgePublicUrl: config.publicUrl });
+  });
+
   app.post("/api/auth/lookup", async (req, res) => {
     const credentials = loginSchema.parse(req.body);
     const user = await storage.getUserByUsernameOrEmail(credentials.username);
@@ -127,56 +101,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/gfs-session", async (req, res) => {
-    const handoff = typeof req.body?.handoff === "string" ? req.body.handoff : undefined;
-    const gfsOrigin = req.body?.gfsOrigin;
-    const gameforgeUrl = getGameForgeVerificationUrl(gfsOrigin);
-    const cookie = req.headers.cookie;
+    const code = typeof req.body?.code === "string" ? req.body.code : undefined;
+    const config = getGameForgeConfig();
 
-    if (!gameforgeUrl) {
+    if (!config) {
       return res.status(401).json({ message: "GameForgeStudio verification URL is not configured" });
     }
 
-    let gameforgeUser: GameForgeUserPayload;
-
-    if (handoff) {
-      if (typeof gfsOrigin === "string" && !getVerifiedGameForgeOrigin(gfsOrigin)) {
-        return res.status(401).json({ message: "GameForgeStudio origin is not allowed" });
-      }
-
-      let handoffResponse: globalThis.Response;
-      try {
-        handoffResponse = await fetch(new URL("/api/auth/buttonz-handoff/verify", gameforgeUrl), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: handoff }),
-        });
-      } catch {
-        return res.status(401).json({ message: "GameForgeStudio handoff verify endpoint could not be reached" });
-      }
-
-      if (!handoffResponse.ok) {
-        return res.status(401).json({ message: "GameForgeStudio handoff was invalid or expired" });
-      }
-
-      gameforgeUser = await handoffResponse.json() as GameForgeUserPayload;
-    } else if (!cookie) {
-      return res.status(401).json({ message: "No GameForgeStudio session available" });
-    } else {
-      let response: globalThis.Response;
-      try {
-        response = await fetch(new URL("/api/user/current", gameforgeUrl), {
-          headers: { cookie },
-        });
-      } catch {
-        return res.status(401).json({ message: "GameForgeStudio session could not be verified" });
-      }
-
-      if (!response.ok) {
-        return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
-      }
-
-      gameforgeUser = await response.json() as GameForgeUserPayload;
+    if (!code) {
+      return res.status(401).json({ message: "No GameForgeStudio auth code was provided" });
     }
+
+    let exchangeResponse: globalThis.Response;
+    try {
+      exchangeResponse = await fetch(new URL("/api/external-apps/buttonz/exchange", config.apiUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, appId: config.appId }),
+      });
+    } catch (error) {
+      console.error("GameForgeStudio code exchange endpoint could not be reached:", error);
+      return res.status(401).json({ message: "GameForgeStudio code exchange endpoint could not be reached" });
+    }
+
+    if (!exchangeResponse.ok) {
+      const errorText = await exchangeResponse.text();
+      console.error("GameForgeStudio code exchange failed:", {
+        status: exchangeResponse.status,
+        body: errorText,
+      });
+      return res.status(401).json({ message: "GameForgeStudio auth code was invalid or expired" });
+    }
+
+    const gameforgeUser = await exchangeResponse.json() as GameForgeUserPayload;
 
     if (!gameforgeUser.id) {
       return res.status(401).json({ message: "GameForgeStudio session did not include a user" });

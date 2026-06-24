@@ -33,9 +33,9 @@ This project is framed as professional progress: the current app demonstrates th
 
 - Direct Buttonz login is disabled by design.
 - Users are expected to sign in through GameForgeStudio first.
-- Buttonz verifies a GFS session through `GAMEFORGE_URL` and creates a local Buttonz session.
+- Buttonz exchanges a short-lived GFS auth code through `GAMEFORGE_API_URL` and creates a local Buttonz session.
 - Client requests use `credentials: "include"` so session cookies are included with API calls.
-- The UI includes return-to-GameForgeStudio behavior through `VITE_GFS_URL`.
+- The UI gets return-to-GameForgeStudio behavior from the Buttonz backend's `GAMEFORGE_PUBLIC_URL` config.
 
 ### Product Direction
 
@@ -60,8 +60,8 @@ shared/          Drizzle table definitions, Zod insert schemas, shared app types
 
 ### Backend
 
-- Express owns authentication handoff, session creation, chat routes, message routes, and user lookup.
-- `POST /api/auth/gfs-session` verifies the active GameForgeStudio session before creating a Buttonz session.
+- Express owns authentication code exchange, session creation, chat routes, message routes, and user lookup.
+- `POST /api/auth/gfs-session` exchanges a GFS-issued code before creating a Buttonz session.
 - Protected routes require a Buttonz session and chat membership where appropriate.
 - Errors are returned through JSON responses with HTTP status codes.
 
@@ -88,9 +88,9 @@ Copy `.env.example` to `.env` and fill in values for your local database and Gam
 DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 SESSION_SECRET=replace-with-a-long-random-secret
 PORT=5001
-GAMEFORGE_URL=http://localhost:5000
-GAMEFORGE_ALLOWED_ORIGINS=http://localhost:5000,http://localhost:5173
-VITE_GFS_URL=http://localhost:5173
+GAMEFORGE_APP_ID=buttonz
+GAMEFORGE_PUBLIC_URL=http://localhost:5173
+GAMEFORGE_API_URL=http://localhost:5000
 USE_VITE_MIDDLEWARE=false
 ```
 
