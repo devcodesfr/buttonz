@@ -136,6 +136,3 @@ The next phase is focused on making the app more production-shaped: clearer depl
 
 - [GameForgeStudio](https://github.com/devcodesfr/gameforgestudio-platform) - central GameForgeStudio platform hub.
 
-## Resume Notes
-
-This project highlights full-stack TypeScript development, standalone product architecture, cross-app identity integration, REST API design, session authentication, PostgreSQL data modeling, and focused product separation inside a larger ecosystem.
