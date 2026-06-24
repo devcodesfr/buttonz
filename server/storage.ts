@@ -14,6 +14,25 @@ import {
   type User,
 } from "@shared/schema";
 
+export type GameForgeUserPayload = {
+  id: string;
+  username?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  role?: string | null;
+  avatar?: string | null;
+  banner?: string | null;
+  bio?: string | null;
+  jobTitle?: string | null;
+  status?: string | null;
+  location?: string | null;
+  portfolioLink?: string | null;
+  skills?: string[] | null;
+  currentProject?: string | null;
+  availability?: string | null;
+  settings?: unknown;
+};
+
 export class ButtonzStorage {
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -31,6 +50,50 @@ export class ButtonzStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users).orderBy(asc(users.displayName));
+  }
+
+  async ensureUserFromGameForge(gameforgeUser: GameForgeUserPayload): Promise<User> {
+    const userValues = {
+      username: gameforgeUser.username || `gfs-${gameforgeUser.id}`,
+      email: gameforgeUser.email || `${gameforgeUser.id}@gameforgestudio.local`,
+      displayName: gameforgeUser.displayName || gameforgeUser.username || "GameForge User",
+      role: gameforgeUser.role || "developer",
+      avatar: gameforgeUser.avatar || null,
+      banner: gameforgeUser.banner || null,
+      bio: gameforgeUser.bio || null,
+      jobTitle: gameforgeUser.jobTitle || null,
+      status: gameforgeUser.status || null,
+      location: gameforgeUser.location || null,
+      portfolioLink: gameforgeUser.portfolioLink || null,
+      skills: gameforgeUser.skills || [],
+      currentProject: gameforgeUser.currentProject || null,
+      availability: gameforgeUser.availability || "online",
+      settings: gameforgeUser.settings || null,
+    };
+    const existing =
+      await this.getUser(gameforgeUser.id) ||
+      await this.getUserByUsernameOrEmail(userValues.username) ||
+      await this.getUserByUsernameOrEmail(userValues.email);
+
+    if (existing) {
+      const [updatedUser] = await db
+        .update(users)
+        .set(userValues)
+        .where(eq(users.id, existing.id))
+        .returning();
+      return updatedUser;
+    }
+
+    const [createdUser] = await db
+      .insert(users)
+      .values({
+        id: gameforgeUser.id,
+        password: "managed-by-gameforgestudio",
+        ...userValues,
+      })
+      .returning();
+
+    return createdUser;
   }
 
   async ensureMainChat(userId: string): Promise<Chat> {

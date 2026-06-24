@@ -7,7 +7,7 @@ import {
   loginSchema,
   safePublicUser,
 } from "@shared/schema";
-import { storage } from "./storage";
+import { storage, type GameForgeUserPayload } from "./storage";
 
 declare module "express-session" {
   interface SessionData {
@@ -100,15 +100,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "GameForgeStudio session was not authenticated" });
     }
 
-    const gameforgeUser = await response.json() as { id?: string };
+    const gameforgeUser = await response.json() as GameForgeUserPayload;
     if (!gameforgeUser.id) {
       return res.status(401).json({ message: "GameForgeStudio session did not include a user" });
     }
 
-    const user = await storage.getUser(gameforgeUser.id);
-    if (!user) {
-      return res.status(401).json({ message: "GameForgeStudio account was not found" });
-    }
+    const user = await storage.ensureUserFromGameForge(gameforgeUser);
 
     await createButtonzSession(req, user.id);
 
