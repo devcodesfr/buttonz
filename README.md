@@ -132,28 +132,6 @@ Buttonz is active and in progress. The app currently demonstrates the standalone
 
 The next phase is focused on making the app more production-shaped: clearer deployment flow, stronger cross-app authentication strategy, more complete chat UX, and cleaner operational boundaries between Buttonz and GameForgeStudio.
 
-## Roadmap
-
-### Short Term
-
-- Keep Buttonz launched externally from GameForgeStudio.
-- Improve local setup documentation around shared identity and database requirements.
-- Tighten the GameForgeStudio session verification flow.
-- Polish empty, loading, and failed-auth states.
-
-### Mid Term
-
-- Add richer chat management flows for members, roles, and direct messages.
-- Improve message interactions such as editing affordances, deletion UX, and reply threading.
-- Document the shared identity contract between GFS and Buttonz.
-
-### Long Term
-
-- Keep Buttonz as a separately deployable ecosystem app.
-- Build a stronger production authentication handoff between GFS and Buttonz.
-- Add deployment, observability, authorization hardening, and migration workflows.
-- Expand Buttonz into the communication layer for the broader GameForgeStudio product suite.
-
 ## Related Project
 
 - [devcodesfr/gameforgestudio-platform](https://github.com/devcodesfr/gameforgestudio-platform) - central GameForgeStudio platform hub.
