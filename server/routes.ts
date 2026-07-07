@@ -69,6 +69,14 @@ function getGameForgeConfig() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      app: "buttonz",
+      status: "ok",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.get("/api/config", (_req, res) => {
     const config = getGameForgeConfig();
     if (!config) {
