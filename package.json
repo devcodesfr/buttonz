@@ -10,7 +10,8 @@
     "dev:client": "vite",
     "build": "vite build",
     "start": "tsx server/index.ts",
-    "check": "tsc"
+    "check": "tsc",
+    "db:push": "drizzle-kit push"
   },
   "repository": {
     "type": "git",
@@ -56,6 +57,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
+    "drizzle-kit": "^0.31.8",
     "postcss": "^8.5.12",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.21.0",
