@@ -1,7 +1,13 @@
+import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required for Buttonz database schema pushes.");
+const migrationDatabaseUrl =
+  process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!migrationDatabaseUrl) {
+  throw new Error(
+    "MIGRATION_DATABASE_URL or DATABASE_URL is required for Buttonz schema changes.",
+  );
 }
 
 export default defineConfig({
@@ -9,6 +15,6 @@ export default defineConfig({
   schema: "./shared/schema.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: migrationDatabaseUrl,
   },
 });

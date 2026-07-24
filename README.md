@@ -86,6 +86,7 @@ Copy `.env.example` to `.env` and fill in values for your local database and Gam
 
 ```bash
 DATABASE_URL=postgresql://username:password@host/database?sslmode=require
+MIGRATION_DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 SESSION_SECRET=replace-with-a-long-random-secret
 PORT=5001
 GAMEFORGE_APP_ID=buttonz
@@ -96,7 +97,7 @@ USE_VITE_MIDDLEWARE=false
 
 ### 3. Prepare the database
 
-Buttonz expects a PostgreSQL database with the schema defined in `shared/schema.ts`. It also expects user records compatible with GameForgeStudio identities so GFS session verification can map to a Buttonz user.
+Buttonz expects a PostgreSQL database with the schema defined in `shared/schema.ts`. Run `npm run db:push` before starting against a new database. GFS identities are mirrored into Buttonz after a successful backend authorization-code exchange.
 
 ### 4. Run the app locally
 
@@ -124,8 +125,22 @@ npm run build
 | `npm run dev:server` | Start the backend server directly. |
 | `npm run dev:client` | Start the Vite frontend dev server. |
 | `npm run check` | Run TypeScript type checking. |
-| `npm run build` | Build the frontend into `dist/public`. |
-| `npm run start` | Start the backend with `tsx`. |
+| `npm run build` | Build the frontend and compile the Express server. |
+| `npm run start` | Run the compiled production server. |
+| `npm run db:push` | Push the Buttonz schema to PostgreSQL. |
+
+## Production Runtime
+
+Buttonz builds its React client and Express API into one deployable service.
+For Render, use Node 22, `npm ci --include=dev && npm run build`, `npm start`, and
+`/api/health` as the health-check path.
+
+- Use a pooled Neon connection for `DATABASE_URL` at runtime.
+- Use Neon's direct connection for `MIGRATION_DATABASE_URL` during `db:push`.
+- Set `NODE_ENV=production` and `USE_VITE_MIDDLEWARE=false`.
+- Generate a unique `SESSION_SECRET` containing at least 32 characters.
+- Configure `GAMEFORGE_PUBLIC_URL` and `GAMEFORGE_API_URL` with the GFS HTTPS
+  Render URL; runtime code does not fall back to localhost.
 
 ## Current Status
 

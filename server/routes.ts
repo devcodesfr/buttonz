@@ -8,6 +8,12 @@ import {
   safePublicUser,
 } from "@shared/schema";
 import { storage, type GameForgeUserPayload } from "./storage";
+import {
+  BUTTONZ_SESSION_COOKIE,
+  establishButtonzSession,
+} from "./session";
+
+const GFS_EXCHANGE_TIMEOUT_MS = 8_000;
 
 declare module "express-session" {
   interface SessionData {
@@ -52,7 +58,7 @@ function parseLimitOffset(query: Request["query"]) {
 }
 
 async function createButtonzSession(req: Request, userId: string) {
-  req.session.userId = userId;
+  await establishButtonzSession(req, userId);
   await storage.ensureMainChat(userId);
 }
 
@@ -126,6 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, appId: config.appId }),
+        signal: AbortSignal.timeout(GFS_EXCHANGE_TIMEOUT_MS),
       });
     } catch (error) {
       console.error("GameForgeStudio code exchange endpoint could not be reached:", error);
@@ -163,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to logout" });
       }
 
-      res.clearCookie("buttonz.sid");
+      res.clearCookie(BUTTONZ_SESSION_COOKIE);
       return res.json({ message: "Logout successful" });
     });
   });

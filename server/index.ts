@@ -1,27 +1,16 @@
 import "dotenv/config";
 import express, { type NextFunction, type Request, type Response } from "express";
-import session from "express-session";
 import { registerRoutes } from "./routes";
-import { log, serveStatic, setupVite } from "./vite";
-
-if (!process.env.SESSION_SECRET) {
-  throw new Error("SESSION_SECRET is required for Buttonz.");
-}
+import { createSessionMiddleware } from "./session";
+import { log, serveStatic } from "./runtime";
 
 const app = express();
 
-app.use(session({
-  name: "buttonz.sid",
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-  },
-}));
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+app.use(createSessionMiddleware());
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
@@ -49,11 +38,18 @@ app.use((req, res, next) => {
       return;
     }
 
-    const message = error instanceof Error ? error.message : "Internal Server Error";
+    const message =
+      process.env.NODE_ENV === "production"
+        ? "Internal Server Error"
+        : error instanceof Error
+          ? error.message
+          : "Internal Server Error";
     res.status(500).json({ message });
   });
 
   if (process.env.USE_VITE_MIDDLEWARE === "true") {
+    const viteModulePath = "./vite";
+    const { setupVite } = await import(viteModulePath);
     await setupVite(app, server);
   } else if (process.env.NODE_ENV === "production") {
     serveStatic(app);
